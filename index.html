@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Meu Jogo Multiplayer Grátis</title>
+    <style>
+        canvas { border: 2px solid black; background: #f0f0f0; }
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="500" height="500"></canvas>
+
+<script src="https://socket.io"></script>
+<script>
+    // Altere para a URL do Render/Fly.io quando fizer o deploy
+    const socket = io('http://localhost:3000'); 
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let players = {};
+    const myPosition = { x: 250, y: 250 };
+    const speed = 5;
+
+    socket.on('currentPlayers', (serverPlayers) => { players = serverPlayers; });
+    socket.on('playerMoved', (data) => { if(players[data.id]) { players[data.id].x = data.x; players[data.id].y = data.y; } });
+    socket.on('playerDisconnected', (id) => { delete players[id]; });
+
+    // Captura comandos do teclado
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.key] = true);
+    window.addEventListener('keyup', e => keys[e.key] = false);
+
+    function update() {
+        let moved = false;
+        if (keys['ArrowUp'] || keys['w']) { myPosition.y -= speed; moved = true; }
+        if (keys['ArrowDown'] || keys['s']) { myPosition.y += speed; moved = true; }
+        if (keys['ArrowLeft'] || keys['a']) { myPosition.x -= speed; moved = true; }
+        if (keys['ArrowRight'] || keys['d']) { myPosition.x += speed; moved = true; }
+
+        if (moved && socket.id) {
+            players[socket.id].x = myPosition.x;
+            players[socket.id].y = myPosition.y;
+            socket.emit('playerMovement', myPosition);
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let id in players) {
+            ctx.fillStyle = players[id].color;
+            ctx.fillRect(players[id].x, players[id].y, 20, 20);
+        }
+    }
+
+    function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+    gameLoop();
+</script>
+</body>
+</html>
