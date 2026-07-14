@@ -2,11 +2,39 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <!-- Esta linha diz ao celular para não afastar a imagem e usar o zoom real -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Protótipo RTS Multiplayer Grátis</title>
     <style>
-        canvas { border: 2px solid black; background: #e0e0e0; cursor: crosshair; }
-        body { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; background: #222; color: white; }
-        p { margin-bottom: 10px; font-size: 14px; }
+        body { 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+            font-family: sans-serif; 
+            background: #222; 
+            color: white;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        p { 
+            margin-bottom: 10px; 
+            font-size: 14px; 
+            text-align: center;
+            max-width: 90vw;
+        }
+        /* Ajusta o canvas para ocupar o máximo de espaço no celular sem distorcer */
+        canvas { 
+            border: 2px solid black; 
+            background: #e0e0e0; 
+            cursor: crosshair; 
+            max-width: 100%;
+            max-height: 70vh;
+            width: auto;
+            height: auto;
+        }
     </style>
 </head>
 <body>
@@ -36,16 +64,30 @@
 
     socket.on('playerDisconnected', (id) => { delete players[id]; });
 
-    // Escuta o clique do mouse na tela do jogo
-    canvas.addEventListener('mousedown', (event) => {
+    // Escuta o clique (computador) ou toque (celular) na tela do jogo
+    function handleInput(event) {
         const rect = canvas.getBoundingClientRect();
-        // Calcula a posição exata do clique descontando as bordas da tela
-        const clickX = event.clientX - rect.left;
-        const clickY = event.clientY - rect.top;
+        
+        // Pega as coordenadas dependendo se é clique ou toque
+        const clientX = event.clientX || (event.touches && event.touches[0].clientX);
+        const clientY = event.clientY || (event.touches && event.touches[0].clientY);
+
+        if (!clientX || !clientY) return;
+
+        // Regra matemática para traduzir o clique da tela para o tamanho real do jogo (500x500)
+        const clickX = (clientX - rect.left) * (canvas.width / rect.width);
+        const clickY = (clientY - rect.top) * (canvas.height / rect.height);
 
         // Envia a ordem de movimento para o servidor
         socket.emit('rtsMoveOrder', { x: clickX, y: clickY });
-    });
+    }
+
+    // Ativa o comando tanto para clique de mouse quanto para toque em telas de celular
+    canvas.addEventListener('mousedown', handleInput);
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // Evita que a tela do celular balance ou role ao tocar no jogo
+        handleInput(e);
+    }, { passive: false });
 
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
