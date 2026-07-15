@@ -3,7 +3,8 @@ const ctx = canvas.getContext('2d');
 
 const WORLD_WIDTH = 2000;
 const WORLD_HEIGHT = 2000;
-const TARGET_VIEW_WIDTH = 300; 
+// AJUSTADO: Reduzido de 500 para 350 para dar muito mais zoom no celular
+const TARGET_VIEW_WIDTH = 350; 
 let gameScale = 1;
 
 let imageLoaded = false;
@@ -13,7 +14,6 @@ spriteSheet.src = 'personagem.png';
 spriteSheet.onload = () => { imageLoaded = true; };
 spriteSheet.onerror = () => { imageLoaded = false; }; 
 
-// Configuração baseada no tamanho real das suas imagens individuais
 const FRAME_WIDTH = 64;
 const FRAME_HEIGHT = 64;
 
@@ -93,7 +93,6 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(0 - cameraX, y - cameraY); ctx.lineTo(WORLD_WIDTH - cameraX, y - cameraY); ctx.stroke();
     }
 
-    // CONTROLE DA ANIMAÇÃO: Ajustado para alternar apenas entre as suas 2 colunas existentes (0 e 1)
     animationFrameCount++;
     if (animationFrameCount >= 12) { 
         currentAnimationFrame = (currentAnimationFrame + 1) % 2; 
@@ -107,7 +106,7 @@ function draw() {
 
         if (screenX >= -50 && screenX <= virtualWidth + 50 && screenY >= -50 && screenY <= virtualHeight + 50) {
             
-            // Mapeamento adaptado para as suas 3 linhas de imagem
+            // CORRIGIDO: Agora sempre usa a linha 0 (primeira linha) independente de para onde o robô ande
             let directionLine = 0; 
             let angle = 0;
 
@@ -115,17 +114,8 @@ function draw() {
                 let dx = p.targetX - p.x;
                 let dy = p.targetY - p.y;
                 angle = Math.atan2(dy, dx);
-
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    // Se andar para os lados, usa a Linha 1 ou Linha 2 da sua imagem
-                    directionLine = dx > 0 ? 2 : 1; 
-                } else {
-                    // Se andar para cima ou para baixo, usa a Linha 0 (sua primeira linha)
-                    directionLine = 0; 
-                }
             }
 
-            // Se o robô parar, ele congela na coluna 0 da respectiva linha
             let colFrame = p.isMoving ? currentAnimationFrame : 0;
 
             if (imageLoaded) {
