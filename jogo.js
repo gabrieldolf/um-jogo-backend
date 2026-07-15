@@ -19,6 +19,9 @@ const FRAME_HEIGHT = 64;
 let animationFrameCount = 0;
 let currentAnimationFrame = 0;
 
+// Objeto local para guardar a posição suavizada dos jogadores na tela
+let clientPlayers = {};
+
 function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -31,23 +34,18 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// FUNÇÃO 1: PROCESSA O CLIQUE DO MOUSE (COMPUTADOR)
 function handleMouseInput(event) {
     enviarOrdemDeMovimento(event.clientX, event.clientY);
 }
 
-// FUNÇÃO 2: PROCESSA O TOQUE NA TELA (CELULAR)
 function handleTouchInput(event) {
     if (event.touches && event.touches.length > 0) {
         enviarOrdemDeMovimento(event.touches[0].clientX, event.touches[0].clientY);
     }
 }
 
-// FUNÇÃO MATEMÁTICA: TRADUZ O CLIQUE/TOQUE DA TELA PARA O MUNDO DO JOGO
 function enviarOrdemDeMovimento(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
-    
-    // Calcula a posição do clique relativa à tela do aparelho
     const screenClickX = clientX - rect.left;
     const screenClickY = clientY - rect.top;
 
@@ -57,24 +55,20 @@ function enviarOrdemDeMovimento(clientX, clientY) {
     const virtualWidth = canvas.width / gameScale;
     const virtualHeight = canvas.height / gameScale;
 
-    // Calcula onde a câmera virtual estava apontando
     let cameraX = localPlayer.x - virtualWidth / 2;
     let cameraY = localPlayer.y - virtualHeight / 2;
     cameraX = Math.max(0, Math.min(cameraX, WORLD_WIDTH - virtualWidth));
     cameraY = Math.max(0, Math.min(cameraY, WORLD_HEIGHT - virtualHeight));
 
-    // Converte a escala do zoom e soma a posição da câmera
     const worldClickX = (screenClickX / gameScale) + cameraX;
     const worldClickY = (screenClickY / gameScale) + cameraY;
 
-    // Envia o comando real para o servidor processar o movimento
     socket.emit('rtsMoveOrder', { x: worldClickX, y: worldClickY });
 }
 
-// Vincula cada evento à sua respectiva função corretora
 canvas.addEventListener('mousedown', handleMouseInput);
 canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault(); // Impede o navegador de rolar a página para baixo ao tocar
+    e.preventDefault(); 
     handleTouchInput(e);
 }, { passive: false });
 
@@ -83,7 +77,33 @@ function draw() {
     ctx.save();
     ctx.scale(gameScale, gameScale);
 
-    let localPlayer = players[socket.id];
+    // ATUALIZAÇÃO DA INTERPOLAÇÃO (Suavização do Lag)
+    for (let id in players) {
+        let serverPlayer = players[id];
+
+        // Se o jogador ainda não existe no nosso cliente local, criamos ele
+        if (!clientPlayers[id]) {
+            clientPlayers[id] = {
+                x: serverPlayer.x,
+                y: serverPlayer.y
+            };
+        }
+
+        // FÓRMULA MATEMÁTICA DA SUAVIZAÇÃO (Aproxima a posição visual da posição real do servidor em 15% por frame)
+        let lerpFactor = 0.15; 
+        clientPlayers[id].x += (serverPlayer.x - clientPlayers[id].x) * lerpFactor;
+        clientPlayers[id].y += (serverPlayer.y - clientPlayers[id].y) * lerpFactor;
+    }
+
+    // Remove do nosso controle visual quem se desconectou do servidor
+    for (let id in clientPlayers) {
+        if (!players[id]) {
+            delete clientPlayers[id];
+        }
+    }
+
+    // Centraliza a câmera usando a posição suavizada do jogador local
+    let localPlayer = clientPlayers[socket.id];
     const virtualWidth = canvas.width / gameScale;
     const virtualHeight = canvas.height / gameScale;
 
@@ -113,22 +133,28 @@ function draw() {
         animationFrameCount = 0;
     }
 
-    for (let id in players) {
-        let p = players[id];
-        let screenX = p.x - cameraX;
-        let screenY = p.y - cameraY;
+    // DESENHO DOS JOGADORES USANDO AS COORDENADAS SUAVIZADAS
+    for (let id in clientPlayers) {
+        let pClient = clientPlayers[id];
+        let pServer = players[id]; // Dados de movimento vindos do servidor externo
+        
+        let screenX = pClient.x - cameraX;
+        let screenY = pClient.y - cameraY;
 
         if (screenX >= -50 && screenX <= virtualWidth + 50 && screenY >= -50 && screenY <= virtualHeight + 50) {
             let directionLine = 0; 
             let angle = 0;
 
-            if (p.isMoving) {
-                let dx = p.targetX - p.x;
-                let dy = p.targetY - p.y;
+            // Baseia a animação de andar nas regras lógicas de movimento do servidor
+            let isMoving = pServer ? pServer.isMoving : false;
+
+            if (isMoving) {
+                let dx = pServer.targetX - pClient.x;
+                let dy = pServer.targetY - pClient.y;
                 angle = Math.atan2(dy, dx);
             }
 
-            let colFrame = p.isMoving ? currentAnimationFrame : 0;
+            let colFrame = isMoving ? currentAnimationFrame : 0;
 
             if (imageLoaded) {
                 ctx.drawImage(
@@ -143,9 +169,9 @@ function draw() {
                 // BACKUP GEOMÉTRICO
                 ctx.save();
                 ctx.translate(screenX, screenY);
-                if (p.isMoving) ctx.rotate(angle);
+                if (isMoving) ctx.rotate(angle);
 
-                ctx.fillStyle = p.color;
+                ctx.fillStyle = pServer ? pServer.color : '#fff';
                 ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
 
