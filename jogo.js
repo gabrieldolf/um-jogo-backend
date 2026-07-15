@@ -3,7 +3,7 @@ const ctx = canvas.getContext('2d');
 
 const WORLD_WIDTH = 2000;
 const WORLD_HEIGHT = 2000;
-const TARGET_VIEW_WIDTH = 700; 
+const TARGET_VIEW_WIDTH = 500; 
 let gameScale = 1;
 
 let animationFrameCount = 0;
