@@ -117,10 +117,7 @@ function draw() {
 
             ctx.restore();
 
-            if (id === socket.id) {
-                ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;
-                ctx.beginPath(); ctx.arc(screenX, screenY + 12, 20, 0, Math.PI * 2); ctx.stroke();
-            }
+            
         }
     }
 
