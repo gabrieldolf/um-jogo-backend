@@ -18,15 +18,19 @@ const FRAME_HEIGHT = 64;
 
 let animationFrameCount = 0;
 let currentAnimationFrame = 0;
-
-// Objeto local para guardar a posição suavizada dos jogadores na tela
 let clientPlayers = {};
 
+// FUNÇÃO DE REDIMENSIONAMENTO OTIMIZADA PARA DESEMPENHO NO CELULAR
 function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    if (window.innerWidth < TARGET_VIEW_WIDTH) {
-        gameScale = window.innerWidth / TARGET_VIEW_WIDTH;
+    // Se a tela for muito grande (como celulares de alta densidade), limitamos a resolução interna
+    let maxResolutionWidth = Math.min(window.innerWidth, 800);
+    let scaleRatio = maxResolutionWidth / window.innerWidth;
+    
+    canvas.width = maxResolutionWidth;
+    canvas.height = window.innerHeight * scaleRatio;
+
+    if (canvas.width < TARGET_VIEW_WIDTH) {
+        gameScale = canvas.width / TARGET_VIEW_WIDTH;
     } else {
         gameScale = 1;
     }
@@ -39,6 +43,7 @@ function handleMouseInput(event) {
 }
 
 function handleTouchInput(event) {
+    // CORREÇÃO E OTIMIZAÇÃO: Lê o primeiro dedo encostado na tela com estabilidade
     if (event.touches && event.touches.length > 0) {
         enviarOrdemDeMovimento(event.touches[0].clientX, event.touches[0].clientY);
     }
@@ -46,8 +51,10 @@ function handleTouchInput(event) {
 
 function enviarOrdemDeMovimento(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
-    const screenClickX = clientX - rect.left;
-    const screenClickY = clientY - rect.top;
+    
+    // Converte a posição física da tela para a resolução interna otimizada do canvas
+    const screenClickX = (clientX - rect.left) * (canvas.width / rect.width);
+    const screenClickY = (clientY - rect.top) * (canvas.height / rect.height);
 
     let localPlayer = players[socket.id];
     if (!localPlayer) return;
@@ -77,32 +84,21 @@ function draw() {
     ctx.save();
     ctx.scale(gameScale, gameScale);
 
-    // ATUALIZAÇÃO DA INTERPOLAÇÃO (Suavização do Lag)
+    // INTERPOLAÇÃO DE POSIÇÃO
     for (let id in players) {
         let serverPlayer = players[id];
-
-        // Se o jogador ainda não existe no nosso cliente local, criamos ele
         if (!clientPlayers[id]) {
-            clientPlayers[id] = {
-                x: serverPlayer.x,
-                y: serverPlayer.y
-            };
+            clientPlayers[id] = { x: serverPlayer.x, y: serverPlayer.y };
         }
-
-        // FÓRMULA MATEMÁTICA DA SUAVIZAÇÃO (Aproxima a posição visual da posição real do servidor em 15% por frame)
         let lerpFactor = 0.15; 
         clientPlayers[id].x += (serverPlayer.x - clientPlayers[id].x) * lerpFactor;
         clientPlayers[id].y += (serverPlayer.y - clientPlayers[id].y) * lerpFactor;
     }
 
-    // Remove do nosso controle visual quem se desconectou do servidor
     for (let id in clientPlayers) {
-        if (!players[id]) {
-            delete clientPlayers[id];
-        }
+        if (!players[id]) delete clientPlayers[id];
     }
 
-    // Centraliza a câmera usando a posição suavizada do jogador local
     let localPlayer = clientPlayers[socket.id];
     const virtualWidth = canvas.width / gameScale;
     const virtualHeight = canvas.height / gameScale;
@@ -133,10 +129,10 @@ function draw() {
         animationFrameCount = 0;
     }
 
-    // DESENHO DOS JOGADORES USANDO AS COORDENADAS SUAVIZADAS
+    // DESENHO DOS JOGADORES
     for (let id in clientPlayers) {
         let pClient = clientPlayers[id];
-        let pServer = players[id]; // Dados de movimento vindos do servidor externo
+        let pServer = players[id]; 
         
         let screenX = pClient.x - cameraX;
         let screenY = pClient.y - cameraY;
@@ -144,8 +140,6 @@ function draw() {
         if (screenX >= -50 && screenX <= virtualWidth + 50 && screenY >= -50 && screenY <= virtualHeight + 50) {
             let directionLine = 0; 
             let angle = 0;
-
-            // Baseia a animação de andar nas regras lógicas de movimento do servidor
             let isMoving = pServer ? pServer.isMoving : false;
 
             if (isMoving) {
