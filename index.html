@@ -2,34 +2,32 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <!-- Esta linha diz ao celular para não afastar a imagem e usar o zoom real -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Protótipo RTS Multiplayer Grátis</title>
+    <title>MMO Top-Down Protótipo</title>
     <style>
-        body { 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-            font-family: sans-serif; 
-            background: #222; 
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: sans-serif;
+            background: #222;
             color: white;
             padding: 10px;
             box-sizing: border-box;
         }
-        p { 
-            margin-bottom: 10px; 
-            font-size: 14px; 
+        p {
+            margin-bottom: 10px;
+            font-size: 14px;
             text-align: center;
             max-width: 90vw;
         }
-        /* Ajusta o canvas para ocupar o máximo de espaço no celular sem distorcer */
-        canvas { 
-            border: 2px solid black; 
-            background: #e0e0e0; 
-            cursor: crosshair; 
+        canvas {
+            border: 2px solid #444;
+            background: #152515; /* Tom verde escuro simulando grama/terreno */
+            cursor: crosshair;
             max-width: 100%;
             max-height: 70vh;
             width: auto;
@@ -38,89 +36,145 @@
     </style>
 </head>
 <body>
+    <p><strong>Comando MMO:</strong> Clique em qualquer lugar para mover. O mapa é grande e a câmera segue você!</p>
+    <canvas id="gameCanvas" width="500" height="500"></canvas>
 
-<p><strong>Comando RTS:</strong> Clique com o botão esquerdo em qualquer lugar do mapa para mover seu quadrado.</p>
-<canvas id="gameCanvas" width="500" height="500"></canvas>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let players = {};
+        
+        // Definição do tamanho do mundo grande (deve ser igual ao do servidor)
+        const WORLD_WIDTH = 2000;
+        const WORLD_HEIGHT = 2000;
 
-<script src="/socket.io/socket.io.js"></script>
-<script>
-    const socket = io(); 
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    
-    let players = {};
+        socket.on('currentPlayers', (serverPlayers) => { players = serverPlayers; });
+        socket.on('positionsUpdate', (serverPlayers) => { players = serverPlayers; });
+        
+        socket.on('playerNewOrder', (data) => {
+            if(players[data.id]) {
+                players[data.id].targetX = data.targetX;
+                players[data.id].targetY = data.targetY;
+                players[data.id].isMoving = true;
+            }
+        });
 
-    // Sincronização direta com o estado do servidor
-    socket.on('currentPlayers', (serverPlayers) => { players = serverPlayers; });
-    socket.on('positionsUpdate', (serverPlayers) => { players = serverPlayers; });
-    
-    socket.on('playerNewOrder', (data) => {
-        if(players[data.id]) {
-            players[data.id].targetX = data.targetX;
-            players[data.id].targetY = data.targetY;
-            players[data.id].isMoving = true;
+        socket.on('playerDisconnected', (id) => { delete players[id]; });
+
+        function handleInput(event) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = event.clientX || (event.touches && event.touches[0].clientX);
+            const clientY = event.clientY || (event.touches && event.touches[0].clientY);
+            if (!clientX || !clientY) return;
+
+            // Transforma o clique do tamanho do elemento HTML para o tamanho do canvas (500x500)
+            const canvasClickX = (clientX - rect.left) * (canvas.width / rect.width);
+            const canvasClickY = (clientY - rect.top) * (canvas.height / rect.height);
+
+            // Obtém a posição atual do jogador local para saber onde a câmera estava posicionada
+            let localPlayer = players[socket.id];
+            if (!localPlayer) return;
+
+            // Calcula o deslocamento da câmera usado no momento do desenho
+            let cameraX = localPlayer.x - canvas.width / 2;
+            let cameraY = localPlayer.y - canvas.height / 2;
+
+            // Trava as coordenadas da câmera nos limites do mapa
+            cameraX = Math.max(0, Math.min(cameraX, WORLD_WIDTH - canvas.width));
+            cameraY = Math.max(0, Math.min(cameraY, WORLD_HEIGHT - canvas.height));
+
+            // Traduz o clique na tela para a coordenada real do mundo grande
+            const worldClickX = canvasClickX + cameraX;
+            const worldClickY = canvasClickY + cameraY;
+
+            socket.emit('rtsMoveOrder', { x: worldClickX, y: worldClickY });
         }
-    });
 
-    socket.on('playerDisconnected', (id) => { delete players[id]; });
+        canvas.addEventListener('mousedown', handleInput);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleInput(e);
+        }, { passive: false });
 
-    // Escuta o clique (computador) ou toque (celular) na tela do jogo
-    function handleInput(event) {
-        const rect = canvas.getBoundingClientRect();
-        
-        // Pega as coordenadas dependendo se é clique ou toque
-        const clientX = event.clientX || (event.touches && event.touches[0].clientX);
-        const clientY = event.clientY || (event.touches && event.touches[0].clientY);
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        if (!clientX || !clientY) return;
+            let localPlayer = players[socket.id];
+            
+            // Valores padrão caso o jogador local ainda não tenha carregado
+            let cameraX = 0;
+            let cameraY = 0;
 
-        // Regra matemática para traduzir o clique da tela para o tamanho real do jogo (500x500)
-        const clickX = (clientX - rect.left) * (canvas.width / rect.width);
-        const clickY = (clientY - rect.top) * (canvas.height / rect.height);
+            if (localPlayer) {
+                // Centraliza a câmera no jogador local
+                cameraX = localPlayer.x - canvas.width / 2;
+                cameraY = localPlayer.y - canvas.height / 2;
 
-        // Envia a ordem de movimento para o servidor
-        socket.emit('rtsMoveOrder', { x: clickX, y: clickY });
-    }
+                // Previne que a câmera mostre o "vazio" fora das bordas do mapa de 2000x2000
+                cameraX = Math.max(0, Math.min(cameraX, WORLD_WIDTH - canvas.width));
+                cameraY = Math.max(0, Math.min(cameraY, WORLD_HEIGHT - canvas.height));
+            }
 
-    // Ativa o comando tanto para clique de mouse quanto para toque em telas de celular
-    canvas.addEventListener('mousedown', handleInput);
-    canvas.addEventListener('touchstart', (e) => {
-        e.preventDefault(); // Evita que a tela do celular balance ou role ao tocar no jogo
-        handleInput(e);
-    }, { passive: false });
-
-    function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        for (let id in players) {
-            let p = players[id];
-
-            // Desenha uma linha discreta até o destino se a unidade estiver andando
-            if (p.isMoving) {
-                ctx.strokeStyle = p.color;
-                ctx.setLineDash([4, 4]);
+            // DESENHAR LINHAS DE GRADE DO CENÁRIO (Para dar sensação de movimento no mapa amplo)
+            ctx.strokeStyle = '#253825';
+            ctx.lineWidth = 1;
+            const gridSize = 100;
+            
+            // Linhas verticais
+            for (let x = 0; x <= WORLD_WIDTH; x += gridSize) {
                 ctx.beginPath();
-                ctx.moveTo(p.x, p.y);
-                ctx.lineTo(p.targetX, p.targetY);
+                ctx.moveTo(x - cameraX, 0 - cameraY);
+                ctx.lineTo(x - cameraX, WORLD_HEIGHT - cameraY);
                 ctx.stroke();
-                ctx.setLineDash([]); // Reseta linha tracejada
+            }
+            // Linhas horizontais
+            for (let y = 0; y <= WORLD_HEIGHT; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0 - cameraX, y - cameraY);
+                ctx.lineTo(WORLD_WIDTH - cameraX, y - cameraY);
+                ctx.stroke();
             }
 
-            // Desenha a unidade (quadrado)
-            ctx.fillStyle = p.color;
-            ctx.fillRect(p.x - 10, p.y - 10, 20, 20); // Centraliza o quadrado no ponto (x,y)
+            // DESENHAR JOGADORES
+            for (let id in players) {
+                let p = players[id];
 
-            // Coloca uma borda dourada se for o quadrado do próprio jogador
-            if (id === socket.id) {
-                ctx.strokeStyle = '#ffd700';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(p.x - 11, p.y - 11, 22, 22);
+                // Converte as coordenadas globais do mundo para coordenadas locais da tela do canvas
+                let screenX = p.x - cameraX;
+                let screenY = p.y - cameraY;
+
+                // Otimização: Só desenha se o jogador estiver visível na janela do canvas
+                if (screenX >= -20 && screenX <= canvas.width + 20 && screenY >= -20 && screenY <= canvas.height + 20) {
+                    
+                    // Desenha a linha de destino
+                    if (p.isMoving) {
+                        ctx.strokeStyle = p.color;
+                        ctx.setLineDash([4, 4]);
+                        ctx.beginPath();
+                        ctx.moveTo(screenX, screenY);
+                        ctx.lineTo(p.targetX - cameraX, p.targetY - cameraY);
+                        ctx.stroke();
+                        ctx.setLineDash([]); 
+                    }
+
+                    // Desenha o corpo temporário do personagem (Substituiremos por imagens depois)
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(screenX - 10, screenY - 10, 20, 20); 
+
+                    // Destaque dourado no jogador local
+                    if (id === socket.id) {
+                        ctx.strokeStyle = '#ffd700';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(screenX - 11, screenY - 11, 22, 22);
+                    }
+                }
             }
+            requestAnimationFrame(draw);
         }
         requestAnimationFrame(draw);
-    }
-
-    requestAnimationFrame(draw);
-</script>
+    </script>
 </body>
 </html>
