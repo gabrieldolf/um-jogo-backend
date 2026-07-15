@@ -5,7 +5,14 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
+
+// Esta linha faz o servidor carregar os arquivos conexao.js e jogo.js automaticamente
 app.use(express.static(__dirname)); 
+
+// Rota principal atualizada para abrir o seu arquivo index.html
+app.get('/', (req, res) => {
+    res.sendFile(__dirname + '/index.html');
+});
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
@@ -13,14 +20,12 @@ const io = new Server(server, { cors: { origin: "*" } });
 const players = {};
 const SPEED = 3; 
 
-// Limites expandidos do mapa do MMO
 const WORLD_WIDTH = 2000;
 const WORLD_HEIGHT = 2000;
 
 io.on('connection', (socket) => {
     console.log(`Jogador conectado: ${socket.id}`);
 
-    // Jogadores surgem espalhados em qualquer ponto do mapa amplo de 2000x2000
     players[socket.id] = {
         x: Math.floor(Math.random() * (WORLD_WIDTH - 100)) + 50,
         y: Math.floor(Math.random() * (WORLD_HEIGHT - 100)) + 50,
@@ -38,7 +43,6 @@ io.on('connection', (socket) => {
 
     socket.on('rtsMoveOrder', (orderData) => {
         if (players[socket.id]) {
-            // Garante que o alvo do clique respeite as bordas máximas do mapa
             players[socket.id].targetX = Math.max(10, Math.min(orderData.x, WORLD_WIDTH - 10));
             players[socket.id].targetY = Math.max(10, Math.min(orderData.y, WORLD_HEIGHT - 10));
             players[socket.id].isMoving = true;
