@@ -3,8 +3,7 @@ const ctx = canvas.getContext('2d');
 
 const WORLD_WIDTH = 2000;
 const WORLD_HEIGHT = 2000;
-// AJUSTADO: Reduzido de 500 para 350 para dar muito mais zoom no celular
-const TARGET_VIEW_WIDTH = 350; 
+const TARGET_VIEW_WIDTH = 350; // Super zoom calibrado para o celular
 let gameScale = 1;
 
 let imageLoaded = false;
@@ -32,12 +31,23 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-function handleInput(event) {
-    const rect = canvas.getBoundingClientRect();
-    const clientX = event.clientX || (event.touches && event.touches.clientX);
-    const clientY = event.clientY || (event.touches && event.touches.clientY);
-    if (!clientX || !clientY) return;
+// FUNÇÃO 1: PROCESSA O CLIQUE DO MOUSE (COMPUTADOR)
+function handleMouseInput(event) {
+    enviarOrdemDeMovimento(event.clientX, event.clientY);
+}
 
+// FUNÇÃO 2: PROCESSA O TOQUE NA TELA (CELULAR)
+function handleTouchInput(event) {
+    if (event.touches && event.touches.length > 0) {
+        enviarOrdemDeMovimento(event.touches[0].clientX, event.touches[0].clientY);
+    }
+}
+
+// FUNÇÃO MATEMÁTICA: TRADUZ O CLIQUE/TOQUE DA TELA PARA O MUNDO DO JOGO
+function enviarOrdemDeMovimento(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    
+    // Calcula a posição do clique relativa à tela do aparelho
     const screenClickX = clientX - rect.left;
     const screenClickY = clientY - rect.top;
 
@@ -47,21 +57,25 @@ function handleInput(event) {
     const virtualWidth = canvas.width / gameScale;
     const virtualHeight = canvas.height / gameScale;
 
+    // Calcula onde a câmera virtual estava apontando
     let cameraX = localPlayer.x - virtualWidth / 2;
     let cameraY = localPlayer.y - virtualHeight / 2;
     cameraX = Math.max(0, Math.min(cameraX, WORLD_WIDTH - virtualWidth));
     cameraY = Math.max(0, Math.min(cameraY, WORLD_HEIGHT - virtualHeight));
 
+    // Converte a escala do zoom e soma a posição da câmera
     const worldClickX = (screenClickX / gameScale) + cameraX;
     const worldClickY = (screenClickY / gameScale) + cameraY;
 
+    // Envia o comando real para o servidor processar o movimento
     socket.emit('rtsMoveOrder', { x: worldClickX, y: worldClickY });
 }
 
-canvas.addEventListener('mousedown', handleInput);
+// Vincula cada evento à sua respectiva função corretora
+canvas.addEventListener('mousedown', handleMouseInput);
 canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault(); 
-    handleInput(e);
+    e.preventDefault(); // Impede o navegador de rolar a página para baixo ao tocar
+    handleTouchInput(e);
 }, { passive: false });
 
 function draw() {
@@ -105,8 +119,6 @@ function draw() {
         let screenY = p.y - cameraY;
 
         if (screenX >= -50 && screenX <= virtualWidth + 50 && screenY >= -50 && screenY <= virtualHeight + 50) {
-            
-            // CORRIGIDO: Agora sempre usa a linha 0 (primeira linha) independente de para onde o robô ande
             let directionLine = 0; 
             let angle = 0;
 
