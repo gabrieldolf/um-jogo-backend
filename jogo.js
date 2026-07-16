@@ -13,16 +13,15 @@ spriteSheet.src = 'personagem.png';
 spriteSheet.onload = () => { imageLoaded = true; };
 spriteSheet.onerror = () => { imageLoaded = false; }; 
 
-const FRAME_WIDTH = 64;
-const FRAME_HEIGHT = 64;
+// CONFIGURAÇÃO MODIFICADA: Ajustado para 128x128 pixels para ler seu arquivo do Photoshop
+const FRAME_WIDTH = 128;
+const FRAME_HEIGHT = 128;
 
 let animationFrameCount = 0;
 let currentAnimationFrame = 0;
 let clientPlayers = {};
 
-// FUNÇÃO DE REDIMENSIONAMENTO OTIMIZADA PARA DESEMPENHO NO CELULAR
 function resizeCanvas() {
-    // Se a tela for muito grande (como celulares de alta densidade), limitamos a resolução interna
     let maxResolutionWidth = Math.min(window.innerWidth, 800);
     let scaleRatio = maxResolutionWidth / window.innerWidth;
     
@@ -43,7 +42,6 @@ function handleMouseInput(event) {
 }
 
 function handleTouchInput(event) {
-    // CORREÇÃO E OTIMIZAÇÃO: Lê o primeiro dedo encostado na tela com estabilidade
     if (event.touches && event.touches.length > 0) {
         enviarOrdemDeMovimento(event.touches[0].clientX, event.touches[0].clientY);
     }
@@ -51,8 +49,6 @@ function handleTouchInput(event) {
 
 function enviarOrdemDeMovimento(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
-    
-    // Converte a posição física da tela para a resolução interna otimizada do canvas
     const screenClickX = (clientX - rect.left) * (canvas.width / rect.width);
     const screenClickY = (clientY - rect.top) * (canvas.height / rect.height);
 
@@ -137,7 +133,7 @@ function draw() {
         let screenX = pClient.x - cameraX;
         let screenY = pClient.y - cameraY;
 
-        if (screenX >= -50 && screenX <= virtualWidth + 50 && screenY >= -50 && screenY <= virtualHeight + 50) {
+        if (screenX >= -100 && screenX <= virtualWidth + 100 && screenY >= -100 && screenY <= virtualHeight + 100) {
             let directionLine = 0; 
             let angle = 0;
             let isMoving = pServer ? pServer.isMoving : false;
@@ -151,13 +147,14 @@ function draw() {
             let colFrame = isMoving ? currentAnimationFrame : 0;
 
             if (imageLoaded) {
+                // Desenha o personagem em tamanho maior (96x96 pixels no mapa) para dar destaque aos novos detalhes
                 ctx.drawImage(
                     spriteSheet,
                     colFrame * FRAME_WIDTH,       
                     directionLine * FRAME_HEIGHT, 
                     FRAME_WIDTH, FRAME_HEIGHT,    
-                    screenX - 32, screenY - 32,   
-                    64, 64                        
+                    screenX - 48, screenY - 48,   
+                    96, 96                        
                 );
             } else {
                 // BACKUP GEOMÉTRICO
@@ -179,7 +176,7 @@ function draw() {
 
             if (id === socket.id) {
                 ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;
-                ctx.beginPath(); ctx.arc(screenX, screenY + 20, 24, 0, Math.PI * 2); ctx.stroke();
+                ctx.beginPath(); ctx.arc(screenX, screenY + 25, 30, 0, Math.PI * 2); ctx.stroke();
             }
         }
     }
