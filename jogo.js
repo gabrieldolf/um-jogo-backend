@@ -13,7 +13,7 @@ spriteSheet.src = 'personagem.png';
 spriteSheet.onload = () => { imageLoaded = true; };
 spriteSheet.onerror = () => { imageLoaded = false; }; 
 
-// CONFIGURAÇÃO MODIFICADA: Ajustado para 128x128 pixels para ler seu arquivo do Photoshop
+// Configuração para ler seu arquivo do Photoshop de 128x128 pixels
 const FRAME_WIDTH = 128;
 const FRAME_HEIGHT = 128;
 
@@ -80,11 +80,11 @@ function draw() {
     ctx.save();
     ctx.scale(gameScale, gameScale);
 
-    // INTERPOLAÇÃO DE POSIÇÃO
+    // INTERPOLAÇÃO DE POSIÇÃO (Suavização de Lag)
     for (let id in players) {
         let serverPlayer = players[id];
         if (!clientPlayers[id]) {
-            clientPlayers[id] = { x: serverPlayer.x, y: serverPlayer.y };
+            clientPlayers[id] = { x: serverPlayer.x, y: serverPlayer.y, id: id };
         }
         let lerpFactor = 0.15; 
         clientPlayers[id].x += (serverPlayer.x - clientPlayers[id].x) * lerpFactor;
@@ -125,9 +125,18 @@ function draw() {
         animationFrameCount = 0;
     }
 
-    // DESENHO DOS JOGADORES
+    // CORREÇÃO: CRIA UMA LISTA ORDENADA POR PROFUNDIDADE (Y-SORTING)
+    let renderList = [];
     for (let id in clientPlayers) {
-        let pClient = clientPlayers[id];
+        renderList.push(clientPlayers[id]);
+    }
+    // Ordena do menor Y (topo) para o maior Y (base)
+    renderList.sort((playerA, playerB) => playerA.y - playerB.y);
+
+    // DESENHO DAS UNIDADES SEGUINDO A ORDEM DA LISTA DE PROFUNDIDADE
+    for (let i = 0; i < renderList.length; i++) {
+        let pClient = renderList[i];
+        let id = pClient.id;
         let pServer = players[id]; 
         
         let screenX = pClient.x - cameraX;
@@ -146,8 +155,17 @@ function draw() {
 
             let colFrame = isMoving ? currentAnimationFrame : 0;
 
+            // CORREÇÃO: Desenha o círculo amarelo PRIMEIRO (Fica por baixo do personagem)
+            if (id === socket.id) {
+                ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); 
+                // Ajusta a posição central sob a roda do robô
+                ctx.arc(screenX, screenY + 25, 30, 0, Math.PI * 2); 
+                ctx.stroke();
+            }
+
+            // CORREÇÃO: Desenha o personagem por CIMA do círculo e de objetos com Y menor
             if (imageLoaded) {
-                // Desenha o personagem em tamanho maior (96x96 pixels no mapa) para dar destaque aos novos detalhes
                 ctx.drawImage(
                     spriteSheet,
                     colFrame * FRAME_WIDTH,       
@@ -172,11 +190,6 @@ function draw() {
                 ctx.beginPath(); ctx.arc(9, -5, 1.5, 0, Math.PI * 2); ctx.arc(9, 5, 1.5, 0, Math.PI * 2); ctx.fill();
 
                 ctx.restore();
-            }
-
-            if (id === socket.id) {
-                ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;
-                ctx.beginPath(); ctx.arc(screenX, screenY + 25, 30, 0, Math.PI * 2); ctx.stroke();
             }
         }
     }
