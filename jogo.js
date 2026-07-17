@@ -41,14 +41,17 @@ function handleMouseInput(event) {
     enviarOrdemDeMovimento(event.clientX, event.clientY);
 }
 
+// CORREÇÃO: Captura com precisão o primeiro dedo indexado [0] que toca a tela do celular
 function handleTouchInput(event) {
     if (event.touches && event.touches.length > 0) {
-        enviarOrdemDeMovimento(event.touches.clientX, event.touches.clientY);
+        enviarOrdemDeMovimento(event.touches[0].clientX, event.touches[0].clientY);
     }
 }
 
 function enviarOrdemDeMovimento(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
+    
+    // Transforma a coordenada física do clique/toque para a resolução virtual do canvas
     const screenClickX = (clientX - rect.left) * (canvas.width / rect.width);
     const screenClickY = (clientY - rect.top) * (canvas.height / rect.height);
 
