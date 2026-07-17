@@ -8,12 +8,12 @@ let gameScale = 1;
 
 let imageLoaded = false;
 const spriteSheet = new Image();
-spriteSheet.src = 'personagem.png'; 
+spriteSheet.src = 'personagem.png'; // Substitua pelo arquivo PNG enviado por você
 
 spriteSheet.onload = () => { imageLoaded = true; };
 spriteSheet.onerror = () => { imageLoaded = false; }; 
 
-// Configuração para ler seu arquivo do Photoshop de 128x128 pixels
+// Dimensões exatas de cada um dos seus 4 blocos quadrados do Photoshop
 const FRAME_WIDTH = 128;
 const FRAME_HEIGHT = 128;
 
@@ -43,7 +43,7 @@ function handleMouseInput(event) {
 
 function handleTouchInput(event) {
     if (event.touches && event.touches.length > 0) {
-        enviarOrdemDeMovimento(event.touches[0].clientX, event.touches[0].clientY);
+        enviarOrdemDeMovimento(event.touches.clientX, event.touches.clientY);
     }
 }
 
@@ -84,11 +84,19 @@ function draw() {
     for (let id in players) {
         let serverPlayer = players[id];
         if (!clientPlayers[id]) {
-            clientPlayers[id] = { x: serverPlayer.x, y: serverPlayer.y, id: id };
+            clientPlayers[id] = { x: serverPlayer.x, y: serverPlayer.y, id: id, facingLeft: false };
         }
         let lerpFactor = 0.15; 
         clientPlayers[id].x += (serverPlayer.x - clientPlayers[id].x) * lerpFactor;
         clientPlayers[id].y += (serverPlayer.y - clientPlayers[id].y) * lerpFactor;
+
+        // Verifica a direção horizontal para saber se precisa inverter a imagem
+        if (serverPlayer.isMoving) {
+            let dx = serverPlayer.targetX - serverPlayer.x;
+            if (Math.abs(dx) > 0.5) {
+                clientPlayers[id].facingLeft = dx < 0;
+            }
+        }
     }
 
     for (let id in clientPlayers) {
@@ -119,21 +127,21 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(0 - cameraX, y - cameraY); ctx.lineTo(WORLD_WIDTH - cameraX, y - cameraY); ctx.stroke();
     }
 
+    // CONTROLE DA ANIMAÇÃO: Alterna sequencialmente entre as suas 4 colunas horizontais (0, 1, 2 e 3)
     animationFrameCount++;
-    if (animationFrameCount >= 12) { 
-        currentAnimationFrame = (currentAnimationFrame + 1) % 2; 
+    if (animationFrameCount >= 10) { 
+        currentAnimationFrame = (currentAnimationFrame + 1) % 4; 
         animationFrameCount = 0;
     }
 
-    // CORREÇÃO: CRIA UMA LISTA ORDENADA POR PROFUNDIDADE (Y-SORTING)
+    // LISTA ORDENADA POR PROFUNDIDADE (Y-SORTING)
     let renderList = [];
     for (let id in clientPlayers) {
         renderList.push(clientPlayers[id]);
     }
-    // Ordena do menor Y (topo) para o maior Y (base)
     renderList.sort((playerA, playerB) => playerA.y - playerB.y);
 
-    // DESENHO DAS UNIDADES SEGUINDO A ORDEM DA LISTA DE PROFUNDIDADE
+    // DESENHO DAS UNIDADES
     for (let i = 0; i < renderList.length; i++) {
         let pClient = renderList[i];
         let id = pClient.id;
@@ -143,7 +151,6 @@ function draw() {
         let screenY = pClient.y - cameraY;
 
         if (screenX >= -100 && screenX <= virtualWidth + 100 && screenY >= -100 && screenY <= virtualHeight + 100) {
-            let directionLine = 0; 
             let angle = 0;
             let isMoving = pServer ? pServer.isMoving : false;
 
@@ -155,27 +162,41 @@ function draw() {
 
             let colFrame = isMoving ? currentAnimationFrame : 0;
 
-            // CORREÇÃO: Desenha o círculo amarelo PRIMEIRO (Fica por baixo do personagem)
+            // Desenha o círculo amarelo no chão (por baixo dos pés)
             if (id === socket.id) {
                 ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;
                 ctx.beginPath(); 
-                // Ajusta a posição central sob a roda do robô
                 ctx.arc(screenX, screenY + 25, 30, 0, Math.PI * 2); 
                 ctx.stroke();
             }
 
-            // CORREÇÃO: Desenha o personagem por CIMA do círculo e de objetos com Y menor
             if (imageLoaded) {
-                ctx.drawImage(
-                    spriteSheet,
-                    colFrame * FRAME_WIDTH,       
-                    directionLine * FRAME_HEIGHT, 
-                    FRAME_WIDTH, FRAME_HEIGHT,    
-                    screenX - 48, screenY - 48,   
-                    96, 96                        
-                );
+                ctx.save();
+                
+                // MÁGICA DO ESPELHAMENTO: Se andar para a esquerda, inverte o eixo X do desenho
+                if (pClient.facingLeft) {
+                    ctx.translate(screenX, screenY);
+                    ctx.scale(-1, 1);
+                    ctx.drawImage(
+                        spriteSheet,
+                        colFrame * FRAME_WIDTH, 0, // Lê sempre a primeira linha (0) da sua nova folha
+                        FRAME_WIDTH, FRAME_HEIGHT,    
+                        -48, -48, // Ajusta o pivô centralizado invertido  
+                        96, 96                        
+                    );
+                } else {
+                    // Desenha normal para a direita/cima/baixo
+                    ctx.drawImage(
+                        spriteSheet,
+                        colFrame * FRAME_WIDTH, 0, 
+                        FRAME_WIDTH, FRAME_HEIGHT,    
+                        screenX - 48, screenY - 48,   
+                        96, 96                        
+                    );
+                }
+                ctx.restore();
             } else {
-                // BACKUP GEOMÉTRICO
+                // BACKUP GEOMÉTRICO CASO CONEXÃO FALHE
                 ctx.save();
                 ctx.translate(screenX, screenY);
                 if (isMoving) ctx.rotate(angle);
