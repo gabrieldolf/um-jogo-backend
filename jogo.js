@@ -3,7 +3,7 @@ const ctx = canvas.getContext('2d');
 
 const WORLD_WIDTH = 2000;
 const WORLD_HEIGHT = 2000;
-const TARGET_VIEW_WIDTH = 350; // Super zoom calibrado para o celular
+const TARGET_VIEW_WIDTH = 350; 
 let gameScale = 1;
 
 let imageLoaded = false;
@@ -13,21 +13,19 @@ spriteSheet.src = 'personagem.png';
 spriteSheet.onload = () => { imageLoaded = true; };
 spriteSheet.onerror = () => { imageLoaded = false; }; 
 
-// Dimensões exatas de cada um dos seus 4 blocos quadrados do Photoshop
 const FRAME_WIDTH = 128;
 const FRAME_HEIGHT = 128;
 
 let animationFrameCount = 0;
 let currentAnimationFrame = 0;
 let clientPlayers = {};
+let gameObstacles = []; // Guarda a lista de paredes enviada pelo servidor
 
 function resizeCanvas() {
     let maxResolutionWidth = Math.min(window.innerWidth, 800);
     let scaleRatio = maxResolutionWidth / window.innerWidth;
-    
     canvas.width = maxResolutionWidth;
     canvas.height = window.innerHeight * scaleRatio;
-
     if (canvas.width < TARGET_VIEW_WIDTH) {
         gameScale = canvas.width / TARGET_VIEW_WIDTH;
     } else {
@@ -37,11 +35,15 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
+// ESCUTA AS PAREDES VINDAS DO SERVIDOR
+socket.on('currentObstacles', (serverObstacles) => {
+    gameObstacles = serverObstacles;
+});
+
 function handleMouseInput(event) {
     enviarOrdemDeMovimento(event.clientX, event.clientY);
 }
 
-// CORREÇÃO: Captura com precisão o primeiro dedo indexado [0] que toca a tela do celular
 function handleTouchInput(event) {
     if (event.touches && event.touches.length > 0) {
         enviarOrdemDeMovimento(event.touches[0].clientX, event.touches[0].clientY);
@@ -50,8 +52,6 @@ function handleTouchInput(event) {
 
 function enviarOrdemDeMovimento(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
-    
-    // Transforma a coordenada física do clique/toque para a resolução virtual do canvas
     const screenClickX = (clientX - rect.left) * (canvas.width / rect.width);
     const screenClickY = (clientY - rect.top) * (canvas.height / rect.height);
 
@@ -83,7 +83,7 @@ function draw() {
     ctx.save();
     ctx.scale(gameScale, gameScale);
 
-    // INTERPOLAÇÃO DE POSIÇÃO (Suavização de Lag)
+    // INTERPOLAÇÃO DE POSIÇÃO
     for (let id in players) {
         let serverPlayer = players[id];
         if (!clientPlayers[id]) {
@@ -129,7 +129,22 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(0 - cameraX, y - cameraY); ctx.lineTo(WORLD_WIDTH - cameraX, y - cameraY); ctx.stroke();
     }
 
-    // CONTROLE DA ANIMAÇÃO: Alterna sequencialmente entre as suas 4 colunas horizontais
+    // DESENHAR AS PAREDES / OBSTÁCULOS FIXOS NO CENÁRIO
+    ctx.fillStyle = '#4a5568'; // Cor cinza concreto para as paredes
+    ctx.strokeStyle = '#2d3748';
+    ctx.lineWidth = 3;
+    for (let i = 0; i < gameObstacles.length; i++) {
+        let obs = gameObstacles[i];
+        let screenX = obs.x - cameraX;
+        let screenY = obs.y - cameraY;
+        
+        // Só desenha se a parede estiver visível na janela da câmera
+        if (screenX + obs.width >= 0 && screenX <= virtualWidth && screenY + obs.height >= 0 && screenY <= virtualHeight) {
+            ctx.fillRect(screenX, screenY, obs.width, obs.height);
+            ctx.strokeRect(screenX, screenY, obs.width, obs.height);
+        }
+    }
+
     animationFrameCount++;
     if (animationFrameCount >= 10) { 
         currentAnimationFrame = (currentAnimationFrame + 1) % 4; 
@@ -138,12 +153,10 @@ function draw() {
 
     // LISTA ORDENADA POR PROFUNDIDADE (Y-SORTING)
     let renderList = [];
-    for (let id in clientPlayers) {
-        renderList.push(clientPlayers[id]);
-    }
+    for (let id in clientPlayers) { renderList.push(clientPlayers[id]); }
     renderList.sort((playerA, playerB) => playerA.y - playerB.y);
 
-    // DESENHO DAS UNIDADES
+    // DESENHO DOS JOGADORES COBRINDO AS PAREDES SE ESTIVEREM ABAIXO DELAS
     for (let i = 0; i < renderList.length; i++) {
         let pClient = renderList[i];
         let id = pClient.id;
@@ -166,43 +179,22 @@ function draw() {
 
             if (imageLoaded) {
                 ctx.save();
-                
-                // ESPELHAMENTO DINÂMICO
                 if (pClient.facingLeft) {
                     ctx.translate(screenX, screenY);
                     ctx.scale(-1, 1);
-                    ctx.drawImage(
-                        spriteSheet,
-                        colFrame * FRAME_WIDTH, 0, 
-                        FRAME_WIDTH, FRAME_HEIGHT,    
-                        -48, -48,   
-                        96, 96                        
-                    );
+                    ctx.drawImage(spriteSheet, colFrame * FRAME_WIDTH, 0, FRAME_WIDTH, FRAME_HEIGHT, -48, -48, 96, 96);
                 } else {
-                    ctx.drawImage(
-                        spriteSheet,
-                        colFrame * FRAME_WIDTH, 0, 
-                        FRAME_WIDTH, FRAME_HEIGHT,    
-                        screenX - 48, screenY - 48,   
-                        96, 96                        
-                    );
+                    ctx.drawImage(spriteSheet, colFrame * FRAME_WIDTH, 0, FRAME_WIDTH, FRAME_HEIGHT, screenX - 48, screenY - 48, 96, 96);
                 }
                 ctx.restore();
             } else {
                 // BACKUP GEOMÉTRICO
-                ctx.save();
-                ctx.translate(screenX, screenY);
-                if (isMoving) ctx.rotate(angle);
-
+                ctx.save(); ctx.translate(screenX, screenY); if (isMoving) ctx.rotate(angle);
                 ctx.fillStyle = pServer ? pServer.color : '#fff';
                 ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
-
-                ctx.fillStyle = '#fff';
-                ctx.beginPath(); ctx.arc(8, -5, 4, 0, Math.PI * 2); ctx.arc(8, 5, 4, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#000';
-                ctx.beginPath(); ctx.arc(9, -5, 1.5, 0, Math.PI * 2); ctx.arc(9, 5, 1.5, 0, Math.PI * 2); ctx.fill();
-
+                ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(8, -5, 4, 0, Math.PI * 2); ctx.arc(8, 5, 4, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(9, -5, 1.5, 0, Math.PI * 2); ctx.arc(9, 5, 1.5, 0, Math.PI * 2); ctx.fill();
                 ctx.restore();
             }
         }
