@@ -48,7 +48,7 @@ function handleMouseInput(event) {
 
 function handleTouchInput(event) {
     if (event.touches && event.touches.length > 0) {
-        enviarOrdemDeMovimento(event.touches.clientX, event.touches.clientY);
+        enviarOrdemDeMovimento(event.touches[0].clientX, event.touches[0].clientY);
     }
 }
 
@@ -137,37 +137,34 @@ function draw() {
         animationFrameCount = 0;
     }
 
-    // UNIFICAÇÃO DA LISTA DE RENDERIZAÇÃO (Y-SORTING MISTO)
+    // MISTURA E ORDENAÇÃO DE PROFUNDIDADE (Y-SORTING DEFINITIVO CORRIGIDO)
     let renderList = [];
 
-    // Insere os jogadores na lista (O pivô Y de ordenação é a base/pés do personagem)
     for (let id in clientPlayers) {
         renderList.push({
             type: 'player',
-            sortY: clientPlayers[id].y,
+            sortY: clientPlayers[id].y + 20, // Pivô ajustado na base das rodas do robô
             data: clientPlayers[id]
         });
     }
 
-    // Insere as paredes na lista (O pivô Y de ordenação é a linha de base inferior da parede)
     for (let i = 0; i < gameObstacles.length; i++) {
         let obs = gameObstacles[i];
         renderList.push({
             type: 'obstacle',
-            sortY: obs.y + obs.height, 
+            sortY: obs.y + obs.height, // Linha limite inferior da base da parede
             data: obs
         });
     }
 
-    // Ordenação global: Desenha primeiro quem tiver a base mais acima (menor sortY)
-    renderList.sort((itemA, itemB) => itemA.sortY - itemB.y - itemB.sortY);
+    // CORREÇÃO: Compara exclusivamente os eixos lógicos corretos de profundidade
+    renderList.sort((itemA, itemB) => itemA.sortY - itemB.sortY);
 
-    // LOOP ÚNICO DE DESENHO RESPEITANDO A PROFUNDIDADE COMPLETA DO MUNDO
+    // LAÇO SELETIVO DE DESENHO
     for (let i = 0; i < renderList.length; i++) {
         let currentItem = renderList[i];
 
         if (currentItem.type === 'obstacle') {
-            // DESENHO DA PAREDE
             let obs = currentItem.data;
             let screenX = obs.x - cameraX;
             let screenY = obs.y - cameraY;
@@ -180,7 +177,6 @@ function draw() {
                 ctx.strokeRect(screenX, screenY, obs.width, obs.height);
             }
         } else if (currentItem.type === 'player') {
-            // DESENHO DO PERSONAGEM
             let pClient = currentItem.data;
             let id = pClient.id;
             let pServer = players[id];
@@ -217,7 +213,8 @@ function draw() {
                     ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fill();
                     ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
                     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(8, -5, 4, 0, Math.PI * 2); ctx.arc(8, 5, 4, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(9, -5, 1.5, 0, Math.PI * 2); ctx.arc(9, 5, 1.5, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#000';
+                    ctx.beginPath(); ctx.arc(9, -5, 1.5, 0, Math.PI * 2); ctx.arc(9, 5, 1.5, 0, Math.PI * 2); ctx.fill();
                     ctx.restore();
                 }
             }
