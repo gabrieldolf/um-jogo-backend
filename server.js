@@ -5,12 +5,9 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
-
 app.use(express.static(__dirname)); 
 
-app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/index.html');
-});
+app.get('/', (req, res) => { res.sendFile(__dirname + '/index.html'); });
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
@@ -21,29 +18,56 @@ const SPEED = 3;
 const WORLD_WIDTH = 2000;
 const WORLD_HEIGHT = 2000;
 
-// DEFINIÇÃO DAS PAREDES SÓLIDAS NO MAPA (X, Y, Largura, Altura)
+// MAPEAMENTO DAS LINHAS PRETAS DA SUA PLANTA (Paredes de 15px de espessura)
 const obstacles = [
-    { x: 400, y: 300, width: 600, height: 60 },   // Parede Horizontal Superior
-    { x: 400, y: 360, width: 60, height: 400 },   // Parede Vertical Esquerda (Formando um L)
-    { x: 1000, y: 700, width: 80, height: 500 }   // Grande Pilar Central Inferior
+    // --- CASA SUPERIOR ESQUERDA ---
+    // Paredes Externas (com aberturas para portas)
+    { x: 300, y: 300, width: 600, height: 15 },   // Norte
+    { x: 300, y: 300, width: 15, height: 400 },   // Oeste
+    { x: 900, y: 300, width: 15, height: 400 },   // Leste
+    { x: 300, y: 700, width: 250, height: 15 },  // Sul (Esquerda da porta)
+    { x: 670, y: 700, width: 245, height: 15 },  // Sul (Direita da porta)
+    // Divisórias Internas
+    { x: 630, y: 300, width: 15, height: 180 },   // Parede interna vertical
+    { x: 630, y: 480, width: 270, height: 15 },   // Parede interna horizontal
+
+    // --- GRANDE ESTRUTURA INFERIOR ---
+    // Bloco Principal Superior
+    { x: 300, y: 1000, width: 150, height: 15 },  // Teto Superior Esquerdo
+    { x: 570, y: 1000, width: 340, height: 15 },  // Teto Superior Direito (com vão de porta)
+    { x: 300, y: 1000, width: 15, height: 180 },  // Lateral Esquerda Alta
+    { x: 910, y: 1000, width: 15, height: 180 },  // Lateral Direita Alta
+    // Aba Lateral Direita (Expansão)
+    { x: 910, y: 1180, width: 220, height: 15 },  // Teto da ala direita
+    { x: 1130, y: 1180, width: 15, height: 280 }, // Parede Leste da ala direita
+    { x: 910, y: 1460, width: 235, height: 15 },  // Chão da ala direita
+    // Pequeno Corredor/Entrada na Extrema Esquerda
+    { x: 210, y: 1180, width: 90, height: 15 },   // Teto do puxadinho
+    { x: 210, y: 1260, width: 90, height: 15 },   // Chão do puxadinho
+    { x: 210, y: 1180, width: 15, height: 80 },   // Parede Oeste do puxadinho
+    // Lateral Inferior Esquerda (com vão livre de passagem)
+    { x: 300, y: 1260, width: 15, height: 200 },  // Parede lateral baixa
+    // Base e Conexão com o Quarto de Baixo
+    { x: 300, y: 1460, width: 220, height: 15 },  // Chão esquerdo
+    { x: 640, y: 1460, width: 285, height: 15 },  // Chão direito
+    { x: 520, y: 1460, width: 15, height: 120 },  // Corredor vertical descendo esquerdo
+    { x: 640, y: 1460, width: 15, height: 120 },  // Corredor vertical descendo direito
+    // Quarto Isolado Inferior
+    { x: 300, y: 1580, width: 220, height: 15 },  // Teto do quarto inferior
+    { x: 640, y: 1580, width: 220, height: 15 },  // Teto do quarto inferior (lado direito)
+    { x: 300, y: 1580, width: 15, height: 280 },  // Parede Oeste
+    { x: 860, y: 1580, width: 15, height: 280 },  // Parede Leste
+    { x: 300, y: 1860, width: 575, height: 15 }   // Parede Sul absoluta
 ];
 
-// Função matemática que checa se o jogador bateu em alguma parede
 function checkCollision(x, y, radius) {
     for (let i = 0; i < obstacles.length; i++) {
         let obs = obstacles[i];
-        
-        // Encontra o ponto mais próximo da parede em relação ao centro do robô
         let closestX = Math.max(obs.x, Math.min(x, obs.x + obs.width));
         let closestY = Math.max(obs.y, Math.min(y, obs.y + obs.height));
-
-        // Calcula a distância entre o centro do robô e esse ponto mais próximo
         let distanceX = x - closestX;
         let distanceY = y - closestY;
-        let distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
-
-        // Se a distância for menor que o raio do robô, houve colisão!
-        if (distanceSquared < (radius * radius)) {
+        if ((distanceX * distanceX + distanceY * distanceY) < (radius * radius)) {
             return true;
         }
     }
@@ -51,9 +75,6 @@ function checkCollision(x, y, radius) {
 }
 
 io.on('connection', (socket) => {
-    console.log(`Jogador conectado: ${socket.id}`);
-
-    // Garante que o jogador não nasça dentro de uma parede
     let startX, startY;
     do {
         startX = Math.floor(Math.random() * (WORLD_WIDTH - 200)) + 100;
@@ -61,15 +82,10 @@ io.on('connection', (socket) => {
     } while (checkCollision(startX, startY, 16));
 
     players[socket.id] = {
-        x: startX,
-        y: startY,
-        targetX: startX,
-        targetY: startY,
-        isMoving: false,
+        x: startX, y: startY, targetX: startX, targetY: startY, isMoving: false,
         color: '#' + Math.floor(Math.random() * 16777215).toString(16)
     };
 
-    // Envia os jogadores atuais E a lista de obstáculos para o novo jogador
     socket.emit('currentPlayers', players);
     socket.emit('currentObstacles', obstacles);
     socket.broadcast.emit('positionsUpdate', players);
@@ -79,19 +95,16 @@ io.on('connection', (socket) => {
             players[socket.id].targetX = Math.max(16, Math.min(orderData.x, WORLD_WIDTH - 16));
             players[socket.id].targetY = Math.max(16, Math.min(orderData.y, WORLD_HEIGHT - 16));
             players[socket.id].isMoving = true;
-            
             io.emit('playerNewOrder', { id: socket.id, targetX: players[socket.id].targetX, targetY: players[socket.id].targetY });
         }
     });
 
     socket.on('disconnect', () => {
-        console.log(`Jogador desconectado: ${socket.id}`);
         delete players[socket.id];
         io.emit('playerDisconnected', socket.id);
     });
 });
 
-// Loop principal do servidor (60Hz)
 setInterval(() => {
     let movedAny = false;
     for (let id in players) {
@@ -105,33 +118,15 @@ setInterval(() => {
                 let nextX = p.x + (dx / distance) * SPEED;
                 let nextY = p.y + (dy / distance) * SPEED;
 
-                // Tenta mover no eixo X e Y separadamente (deslizamento suave em quinas)
-                if (!checkCollision(nextX, p.y, 16)) {
-                    p.x = nextX;
-                    movedAny = true;
-                } else {
-                    p.isMoving = false; // Para o movimento se bater de frente
-                }
-
-                if (!checkCollision(p.x, nextY, 16)) {
-                    p.y = nextY;
-                    movedAny = true;
-                } else {
-                    p.isMoving = false;
-                }
+                if (!checkCollision(nextX, p.y, 16)) { p.x = nextX; movedAny = true; } else { p.isMoving = false; }
+                if (!checkCollision(p.x, nextY, 16)) { p.y = nextY; movedAny = true; } else { p.isMoving = false; }
             } else {
-                p.x = p.targetX;
-                p.y = p.targetY;
-                p.isMoving = false;
-                movedAny = true; 
+                p.x = p.targetX; p.y = p.targetY; p.isMoving = false; movedAny = true; 
             }
         }
     }
-
-    if (movedAny) {
-        io.emit('positionsUpdate', players);
-    }
+    if (movedAny) { io.emit('positionsUpdate', players); }
 }, 1000 / 60);
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Servidor RTS/MMO rodando na porta ${PORT}`));
+server.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
