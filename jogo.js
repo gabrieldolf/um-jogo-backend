@@ -9,9 +9,26 @@ let gameScale = 1;
 let imageLoaded = false;
 const spriteSheet = new Image();
 spriteSheet.src = 'personagem.png'; 
-
 spriteSheet.onload = () => { imageLoaded = true; };
-spriteSheet.onerror = () => { imageLoaded = false; }; 
+
+// PROVEDOR DE IMAGENS DE TEXTURA (Imagens Gratuitas e Seamless)
+let texturesLoaded = 0;
+const totalTextures = 3;
+
+const imgGrama = new Image();
+// Textura pública de grama verde contínua
+imgGrama.src = 'https://imgur.com'; 
+imgGrama.onload = () => texturesLoaded++;
+
+const imgMadeira = new Image();
+// Textura pública de tábuas de madeira para o chão interno
+imgMadeira.src = 'https://imgur.com'; 
+imgMadeira.onload = () => texturesLoaded++;
+
+const imgRocha = new Image();
+// Textura pública de parede de tijolos de rocha escura
+imgRocha.src = 'https://imgur.com'; 
+imgRocha.onload = () => texturesLoaded++;
 
 const FRAME_WIDTH = 128;
 const FRAME_HEIGHT = 128;
@@ -34,7 +51,7 @@ resizeCanvas();
 socket.on('currentObstacles', (serverObstacles) => { gameObstacles = serverObstacles; });
 
 function handleMouseInput(event) { enviarOrdemDeMovimento(event.clientX, event.clientY); }
-function handleTouchInput(event) { if (event.touches && event.touches.length > 0) { enviarOrdemDeMovimento(event.touches[0].clientX, event.touches[0].clientY); } }
+function handleTouchInput(event) { if (event.touches && event.touches.length > 0) { enviarOrdemDeMovimento(event.touches.clientX, event.touches.clientY); } }
 
 function enviarOrdemDeMovimento(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
@@ -59,7 +76,7 @@ function draw() {
     ctx.save();
     ctx.scale(gameScale, gameScale);
 
-    // INTERPOLAÇÃO
+    // INTERPOLAÇÃO DE MOVIMENTO
     for (let id in players) {
         let serverPlayer = players[id];
         if (!clientPlayers[id]) clientPlayers[id] = { x: serverPlayer.x, y: serverPlayer.y, id: id, facingLeft: false };
@@ -78,44 +95,67 @@ function draw() {
     let cameraX = localPlayer ? Math.max(0, Math.min(localPlayer.x - virtualWidth / 2, WORLD_WIDTH - virtualWidth)) : 0;
     let cameraY = localPlayer ? Math.max(0, Math.min(localPlayer.y - virtualHeight / 2, WORLD_HEIGHT - virtualHeight)) : 0;
 
-    // GRADE DE GRAMA
-    ctx.strokeStyle = '#375737'; ctx.lineWidth = 1;
+    // Criar padrões de repetição das texturas (Mosaico dinâmico)
+    let patGrama = texturesLoaded === totalTextures ? ctx.createPattern(imgGrama, 'repeat') : '#1e3a1e';
+    let patMadeira = texturesLoaded === totalTextures ? ctx.createPattern(imgMadeira, 'repeat') : '#dbb88e';
+    let patRocha = texturesLoaded === totalTextures ? ctx.createPattern(imgRocha, 'repeat') : '#222326';
+
+    // 1. RENDERIZAÇÃO DO CHÃO DE GRAMA (Com compensação de câmera)
+    ctx.save();
+    ctx.translate(-cameraX, -cameraY);
+    ctx.fillStyle = patGrama;
+    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    ctx.restore();
+
+    // GRADE FINA DE APOIO POR CIMA DA GRAMA
+    ctx.strokeStyle = 'rgba(55, 87, 55, 0.4)'; ctx.lineWidth = 1;
     for (let x = 0; x <= WORLD_WIDTH; x += 100) { ctx.beginPath(); ctx.moveTo(x - cameraX, 0 - cameraY); ctx.lineTo(x - cameraX, WORLD_HEIGHT - cameraY); ctx.stroke(); }
     for (let y = 0; y <= WORLD_HEIGHT; y += 100) { ctx.beginPath(); ctx.moveTo(0 - cameraX, y - cameraY); ctx.lineTo(WORLD_WIDTH - cameraX, y - cameraY); ctx.stroke(); }
 
-    // RENDERIZAR OS TIPOS DE CHÃO DA SUA IMAGEM (Áreas Beges Internas)
-    ctx.fillStyle = '#dbb88e'; 
-    // 1. Chão da Casa Superior
-    ctx.fillRect(300 - cameraX, 300 - cameraY, 600, 400);
-    // 2. Chão da Casa Inferior Complexa
-    ctx.fillRect(300 - cameraX, 1000 - cameraY, 610, 460);
-    ctx.fillRect(910 - cameraX, 1180 - cameraY, 220, 280);
-    ctx.fillRect(210 - cameraX, 1180 - cameraY, 90, 80);
-    ctx.fillRect(300 - cameraX, 1580 - cameraY, 560, 280);
-    ctx.fillRect(520 - cameraX, 1460 - cameraY, 120, 120); // Corredor de elo
-    // 3. Grande Círculo de Arena à Direita
+    // 2. RENDERIZAÇÃO DOS TIPOS DE CHÃO INTERNO (PISO DE MADEIRA)
+    ctx.save();
+    ctx.translate(-cameraX, -cameraY);
+    ctx.fillStyle = patMadeira;
+    
+    // Casa Superior Esquerda
+    ctx.fillRect(300, 300, 600, 400);
+    // Casa Inferior Complexa
+    ctx.fillRect(300, 1000, 610, 460);
+    ctx.fillRect(910, 1180, 220, 280);
+    ctx.fillRect(210, 1180, 90, 80);
+    ctx.fillRect(300, 1580, 560, 280);
+    ctx.fillRect(520, 1460, 120, 120); 
+    // Arena Circular (Feita em madeira ou padrão ladrilhado do marrom)
     ctx.beginPath();
-    ctx.arc(1450 - cameraX, 550 - cameraY, 220, 0, Math.PI * 2);
+    ctx.arc(1450, 550, 220, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
 
     animationFrameCount++;
     if (animationFrameCount >= 10) { currentAnimationFrame = (currentAnimationFrame + 1) % 4; animationFrameCount = 0; }
 
-    // FILA DE Y-SORTING
+    // FILA GLOBAL DE PROFUNDIDADE 2.5D (Y-SORTING)
     let renderList = [];
     for (let id in clientPlayers) { renderList.push({ type: 'player', sortY: clientPlayers[id].y + 20, data: clientPlayers[id] }); }
     for (let i = 0; i < gameObstacles.length; i++) { renderList.push({ type: 'obstacle', sortY: gameObstacles[i].y + gameObstacles[i].height, data: gameObstacles[i] }); }
     renderList.sort((a, b) => a.sortY - b.sortY);
 
-    // DESENHO DAS ENTIDADES (Paredes e Robôs)
+    // 3. DESENHO DAS PAREDES DE ROCHA E PERSONAGENS ORDENADOS
     for (let i = 0; i < renderList.length; i++) {
         let item = renderList[i];
         if (item.type === 'obstacle') {
             let obs = item.data;
             let sx = obs.x - cameraX; let sy = obs.y - cameraY;
             if (sx + obs.width >= -50 && sx <= virtualWidth + 50 && sy + obs.height >= -50 && sy <= virtualHeight + 50) {
-                ctx.fillStyle = '#222326'; // Linhas pretas viram paredes escuras e modernas
+                // Desenha a parede aplicando a textura de rocha escura mapeada
+                ctx.save();
+                ctx.fillStyle = patRocha;
                 ctx.fillRect(sx, sy, obs.width, obs.height);
+                // Borda fina para dar acabamento tridimensional nas quinas
+                ctx.strokeStyle = '#111214';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(sx, sy, obs.width, obs.height);
+                ctx.restore();
             }
         } else if (item.type === 'player') {
             let pClient = item.data; let id = pClient.id; let pServer = players[id];
