@@ -11,23 +11,20 @@ const spriteSheet = new Image();
 spriteSheet.src = 'personagem.png'; 
 spriteSheet.onload = () => { imageLoaded = true; };
 
-// PROVEDOR DE IMAGENS DE TEXTURA (Links Alternativos e Diretos)
+// CORREÇÃO DEFINITIVA: Carrega os arquivos locais salvos por você no repositório
 let texturesLoaded = 0;
 const totalTextures = 3;
 
 const imgGrama = new Image();
-// Grama contínua do motor Phaser
-imgGrama.src = 'https://phaser.io'; 
+imgGrama.src = 'grama.png'; 
 imgGrama.onload = () => texturesLoaded++;
 
 const imgMadeira = new Image();
-// Madeira contínua tratada
-imgMadeira.src = 'https://phaser.io'; 
+imgMadeira.src = 'madeira.png'; 
 imgMadeira.onload = () => texturesLoaded++;
 
 const imgRocha = new Image();
-// Rocha/Tijolo escuro estruturado
-imgRocha.src = 'https://phaser.io'; 
+imgRocha.src = 'rocha.png'; 
 imgRocha.onload = () => texturesLoaded++;
 
 const FRAME_WIDTH = 128;
@@ -95,24 +92,24 @@ function draw() {
     let cameraX = localPlayer ? Math.max(0, Math.min(localPlayer.x - virtualWidth / 2, WORLD_WIDTH - virtualWidth)) : 0;
     let cameraY = localPlayer ? Math.max(0, Math.min(localPlayer.y - virtualHeight / 2, WORLD_HEIGHT - virtualHeight)) : 0;
 
-    // Criar padrões de repetição das texturas (Mosaico dinâmico)
+    // Constrói os mosaicos usando os arquivos locais do seu repositório
     let patGrama = texturesLoaded === totalTextures ? ctx.createPattern(imgGrama, 'repeat') : '#1e3a1e';
     let patMadeira = texturesLoaded === totalTextures ? ctx.createPattern(imgMadeira, 'repeat') : '#dbb88e';
     let patRocha = texturesLoaded === totalTextures ? ctx.createPattern(imgRocha, 'repeat') : '#222326';
 
-    // 1. RENDERIZAÇÃO DO CHÃO DE GRAMA (Com compensação de câmera)
+    // 1. CHÃO DE GRAMA
     ctx.save();
     ctx.translate(-cameraX, -cameraY);
     ctx.fillStyle = patGrama;
     ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     ctx.restore();
 
-    // GRADE FINA DE APOIO POR CIMA DA GRAMA
-    ctx.strokeStyle = 'rgba(55, 87, 55, 0.4)'; ctx.lineWidth = 1;
+    // GRADE FINA DE CRUZA
+    ctx.strokeStyle = 'rgba(55, 87, 55, 0.3)'; ctx.lineWidth = 1;
     for (let x = 0; x <= WORLD_WIDTH; x += 100) { ctx.beginPath(); ctx.moveTo(x - cameraX, 0 - cameraY); ctx.lineTo(x - cameraX, WORLD_HEIGHT - cameraY); ctx.stroke(); }
     for (let y = 0; y <= WORLD_HEIGHT; y += 100) { ctx.beginPath(); ctx.moveTo(0 - cameraX, y - cameraY); ctx.lineTo(WORLD_WIDTH - cameraX, y - cameraY); ctx.stroke(); }
 
-    // 2. RENDERIZAÇÃO DOS TIPOS DE CHÃO INTERNO (PISO DE MADEIRA)
+    // 2. CHÃO INTERNO (PISO DE MADEIRA)
     ctx.save();
     ctx.translate(-cameraX, -cameraY);
     ctx.fillStyle = patMadeira;
@@ -125,7 +122,7 @@ function draw() {
     ctx.fillRect(210, 1180, 90, 80);
     ctx.fillRect(300, 1580, 560, 280);
     ctx.fillRect(520, 1460, 120, 120); 
-    // Arena Circular (Feita em madeira ou padrão ladrilhado do marrom)
+    // Arena Circular à Direita
     ctx.beginPath();
     ctx.arc(1450, 550, 220, 0, Math.PI * 2);
     ctx.fill();
@@ -140,20 +137,18 @@ function draw() {
     for (let i = 0; i < gameObstacles.length; i++) { renderList.push({ type: 'obstacle', sortY: gameObstacles[i].y + gameObstacles[i].height, data: gameObstacles[i] }); }
     renderList.sort((a, b) => a.sortY - b.sortY);
 
-    // 3. DESENHO DAS PAREDES DE ROCHA E PERSONAGENS ORDENADOS
+    // 3. DESENHO DAS PAREDES DE ROCHA E JOGADORES
     for (let i = 0; i < renderList.length; i++) {
         let item = renderList[i];
         if (item.type === 'obstacle') {
             let obs = item.data;
             let sx = obs.x - cameraX; let sy = obs.y - cameraY;
             if (sx + obs.width >= -50 && sx <= virtualWidth + 50 && sy + obs.height >= -50 && sy <= virtualHeight + 50) {
-                // Desenha a parede aplicando a textura de rocha escura mapeada
                 ctx.save();
                 ctx.fillStyle = patRocha;
                 ctx.fillRect(sx, sy, obs.width, obs.height);
-                // Borda fina para dar acabamento tridimensional nas quinas
                 ctx.strokeStyle = '#111214';
-                ctx.lineWidth = 1.5;
+                ctx.lineWidth = 1;
                 ctx.strokeRect(sx, sy, obs.width, obs.height);
                 ctx.restore();
             }
