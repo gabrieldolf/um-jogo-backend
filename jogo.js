@@ -11,23 +11,23 @@ const spriteSheet = new Image();
 spriteSheet.src = 'personagem.png'; 
 spriteSheet.onload = () => { imageLoaded = true; };
 
-// PROVEDOR DE IMAGENS DE TEXTURA (Imagens Gratuitas e Seamless)
+// PROVEDOR DE IMAGENS DE TEXTURA (Links Alternativos e Diretos)
 let texturesLoaded = 0;
 const totalTextures = 3;
 
 const imgGrama = new Image();
-// Textura pública de grama verde contínua
-imgGrama.src = 'https://imgur.com'; 
+// Grama contínua do motor Phaser
+imgGrama.src = 'https://phaser.io'; 
 imgGrama.onload = () => texturesLoaded++;
 
 const imgMadeira = new Image();
-// Textura pública de tábuas de madeira para o chão interno
-imgMadeira.src = 'https://imgur.com'; 
+// Madeira contínua tratada
+imgMadeira.src = 'https://phaser.io'; 
 imgMadeira.onload = () => texturesLoaded++;
 
 const imgRocha = new Image();
-// Textura pública de parede de tijolos de rocha escura
-imgRocha.src = 'https://imgur.com'; 
+// Rocha/Tijolo escuro estruturado
+imgRocha.src = 'https://phaser.io'; 
 imgRocha.onload = () => texturesLoaded++;
 
 const FRAME_WIDTH = 128;
